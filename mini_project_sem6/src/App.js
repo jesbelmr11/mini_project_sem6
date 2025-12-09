@@ -1,12 +1,13 @@
 import logo from './logo.svg';
-import './App.css';
-
-import Signup from './Signup';  // ← Import component
+// src/App.js
+import './App.css';                // keep your stylesheet import (or change if your css file is named differently)
+import LoginCard from './components/LoginCard';
+ // <-- must match filename (LoginCard.jsx / LoginCard.js)
 
 function App() {
   return (
     <div className="App">
-      <Signup />   {/* Use the component */}
+      <LoginCard />  {/* component name matches import */}
     </div>
   );
 }
