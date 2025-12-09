@@ -1,15 +1,22 @@
-import logo from './logo.svg';
-// src/App.js
-import './App.css';                // keep your stylesheet import (or change if your css file is named differently)
-import LoginCard from './components/LoginCard';
- // <-- must match filename (LoginCard.jsx / LoginCard.js)
+import { useState } from "react";
+import Login from "./components/login";
+import Signup from "./components/signup";
+import "./styles/style.css";
 
-function App() {
+export default function App() {
+  const [active, setActive] = useState(false); // false = login, true = signup
+
   return (
-    <div className="App">
-      <LoginCard />  {/* component name matches import */}
+    <div className={`container ${active ? "active" : ""}`}>
+      {/* Background shapes */}
+      <div className="curved-shape"></div>
+      <div className="curved-shape2"></div>
+
+      {/* LOGIN FORM */}
+      <Login setActive={setActive} />
+
+      {/* SIGNUP FORM */}
+      <Signup setActive={setActive} />
     </div>
   );
 }
-
-export default App;

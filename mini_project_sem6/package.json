@@ -1,5 +1,5 @@
 {
-  "name": "mini_project_sem6",
+  "name": "login3-demo",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -9,7 +9,8 @@
     "@testing-library/user-event": "^13.5.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-scripts": "^5.0.1",
+    "react-router-dom": "^7.10.1",
+    "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
