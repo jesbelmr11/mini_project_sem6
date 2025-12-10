@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function Login({ setActive }) {
+export default function Login({ setActive, setUser }) {
   const [login, setLogin] = useState({ email: "", password: "" });
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -19,6 +19,9 @@ export default function Login({ setActive }) {
 
     try {
       setLoading(true);
+
+  
+
       const res = await fetch("http://localhost:4000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -26,10 +29,22 @@ export default function Login({ setActive }) {
       });
 
       const data = await res.json();
-      if (!res.ok) setMsg({ type: "error", text: data.error });
-      else setMsg({ type: "success", text: "Login successful!" });
-    } catch {
-      setMsg({ type: "error", text: "Network error" });
+
+      if (!res.ok) {
+        // backend sends { error: "Invalid credentials" } or simil
+        setMsg({ type: "error", text: data.error || "Login failed" });
+      } else {
+        // success: backend returns { message, user }
+        setMsg({ type: "success", text: "Login successful!" });
+
+        // call setUser so App can render Dashboard
+        if (typeof setUser === "function") {
+          setUser(data.user);
+        }
+      }
+    } catch (err) {
+      console.error("fetch error:", err);
+      setMsg({ type: "error", text: "Network error. Is backend running?" });
     } finally {
       setLoading(false);
     }
@@ -78,9 +93,10 @@ export default function Login({ setActive }) {
             </p>
           </div>
 
+          {/* removed undefined setActivePanel — kept UI simple */}
           <div className="regi-link animation" style={{ "--S": 6 }}>
             <p>
-              <a href="#" onClick={(e) => { e.preventDefault(); setActivePanel("forgot"); }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); alert("Forgot password flow not implemented."); }}>
                 Forgot Password?
               </a>
             </p>

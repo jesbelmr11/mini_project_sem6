@@ -1,70 +1,126 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
-export default function ForgotPassword() {
-  const [email, setEmail] = useState("");
+import React, { useState } from "react";
+
+
+export default function Login({ setActive, setUser, onForgot }) {
+  const [login, setLogin] = useState({ email: "", password: "" });
+  const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const navigate = useNavigate();
 
-  const handleSendOTP = async (e) => {
+  function handleChange(e) {
+    setLogin({ ...login, [e.target.name]: e.target.value });
+  }
+
+  async function submitLogin(e) {
     e.preventDefault();
-    setLoading(true);
-    setMessage("");
+    setMsg(null);
+
+    if (!login.email || !login.password) {
+      return setMsg({ type: "error", text: "Enter email and password" });
+    }
 
     try {
-      const res = await fetch("http://localhost:5000/send-otp", {
+      setLoading(true);
+      console.log("Logging in with", login.email);
+
+      const res = await fetch("http://localhost:4000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(login),
       });
+
       const data = await res.json();
-      if (res.ok) {
-        setMessage("✅ OTP sent successfully! Check your inbox.");
+      console.log("Login response", res.status, data);
+
+      if (!res.ok) {
+        setMsg({ type: "error", text: data.error || "Login failed" });
       } else {
-        setMessage("❌ Error sending OTP: " + data.message);
+        setMsg({ type: "success", text: "Login successful!" });
+        if (typeof setUser === "function") setUser(data.user);
       }
-    } catch (error) {
-      setMessage("❌ Failed to send OTP. Check your connection.");
+    } catch (err) {
+      console.error("fetch error:", err);
+      setMsg({ type: "error", text: "Network error. Is backend running?" });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="container" style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-      <h2 style={{ color: "white", marginBottom: "20px" }}>Forgot Password</h2>
-      <form onSubmit={handleSendOTP} style={{ width: "320px" }}>
-        <div className="input-box">
-          <input
-            type="email"
-            required
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <button className="btn" type="submit" disabled={loading}>
-          {loading ? "Sending..." : "Send OTP"}
-        </button>
-      </form>
+    <>
+      <div className="form-box Login">
+        <h2 className="animation" style={{ "--S": 1 }}>Login</h2>
 
-      {message && (
-        <p style={{ color: "#fff", marginTop: "15px", textAlign: "center" }}>{message}</p>
-      )}
+        <form onSubmit={submitLogin}>
+          <div className="input-box animation" style={{ "--S": 2 }}>
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder=" "
+              value={login.email}
+              onChange={handleChange}
+            />
+            <label>Email</label>
+          </div>
 
-      <p style={{ marginTop: "20px" }}>
-        <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("/");
-          }}
-          style={{ color: "#007bff", textDecoration: "none" }}
-        >
-          ← Back to Login
-        </a>
-      </p>
-    </div>
+          <div className="input-box animation" style={{ "--S": 3 }}>
+            <input
+              type="password"
+              name="password"
+              required
+              placeholder=" "
+              value={login.password}
+              onChange={handleChange}
+            />
+            <label>Password</label>
+          </div>
+
+          <div className="input-box animation" style={{ "--S": 4 }}>
+            <button className="btn" type="submit" disabled={loading}>
+              {loading ? "Logging in..." : "Login"}
+            </button>
+          </div>
+
+          <div className="regi-link animation" style={{ "--S": 5 }}>
+            <p>
+              Don’t have an account?{" "}
+              <a href="#" onClick={(e) => { e.preventDefault(); setActive(true); }}>
+                Sign Up
+              </a>
+            </p>
+          </div>
+
+          <div className="regi-link animation" style={{ "--S": 6 }}>
+            <p>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (typeof onForgot === "function") onForgot();
+                  else alert("Forgot password flow not implemented.");
+                }}
+              >
+                Forgot Password?
+              </a>
+            </p>
+          </div>
+
+          {msg && (
+            <p style={{ color: msg.type === "error" ? "red" : "lightgreen" }}>
+              {msg.text}
+            </p>
+          )}
+        </form>
+      </div>
+
+      {/* Right side text */}
+      <div className="info-content Login">
+        <h2 className="animation" style={{ "--S": 1 }}>Welcome Back!</h2>
+        <p className="animation" style={{ "--S": 2 }}>
+          To stay connected with us, please login with your personal info.
+        </p>
+      </div>
+    </>
   );
 }
