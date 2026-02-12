@@ -1,126 +1,163 @@
-
 import React, { useState } from "react";
 
-
-export default function Login({ setActive, setUser, onForgot }) {
-  const [login, setLogin] = useState({ email: "", password: "" });
+export default function ForgotPassword({ onBack }) {
+  const [step, setStep] = useState(1); // 1=email, 2=otp, 3=reset
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  function handleChange(e) {
-    setLogin({ ...login, [e.target.name]: e.target.value });
-  }
-
-  async function submitLogin(e) {
+  // ---------------- Send OTP ----------------
+  async function sendOtp(e) {
     e.preventDefault();
     setMsg(null);
 
-    if (!login.email || !login.password) {
-      return setMsg({ type: "error", text: "Enter email and password" });
-    }
-
     try {
       setLoading(true);
-      console.log("Logging in with", login.email);
-
-      const res = await fetch("http://localhost:4000/api/login", {
+      const res = await fetch("http://localhost:4000/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(login),
+        body: JSON.stringify({ email }),
       });
 
       const data = await res.json();
-      console.log("Login response", res.status, data);
-
       if (!res.ok) {
-        setMsg({ type: "error", text: data.error || "Login failed" });
+        setMsg({ type: "error", text: data.error });
       } else {
-        setMsg({ type: "success", text: "Login successful!" });
-        if (typeof setUser === "function") setUser(data.user);
+        setMsg({ type: "success", text: "OTP sent to your email" });
+        setStep(2);
       }
-    } catch (err) {
-      console.error("fetch error:", err);
-      setMsg({ type: "error", text: "Network error. Is backend running?" });
+    } catch {
+      setMsg({ type: "error", text: "Server error" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ---------------- Verify OTP ----------------
+  async function verifyOtp(e) {
+    e.preventDefault();
+    setMsg(null);
+
+    try {
+      setLoading(true);
+      const res = await fetch("http://localhost:4000/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: otp }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ type: "error", text: data.error });
+      } else {
+        setMsg({ type: "success", text: "OTP verified" });
+        setStep(3);
+      }
+    } catch {
+      setMsg({ type: "error", text: "Server error" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ---------------- Reset Password ----------------
+  async function resetPassword(e) {
+    e.preventDefault();
+    setMsg(null);
+
+    try {
+      setLoading(true);
+      const res = await fetch("http://localhost:4000/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          code: otp,
+          newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ type: "error", text: data.error });
+      } else {
+        setMsg({ type: "success", text: "Password reset successful" });
+        setTimeout(() => {
+          if (typeof onBack === "function") onBack();
+        }, 1500);
+      }
+    } catch {
+      setMsg({ type: "error", text: "Server error" });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <>
-      <div className="form-box Login">
-        <h2 className="animation" style={{ "--S": 1 }}>Login</h2>
+    <div className="form-box Login">
+      <h2>Forgot Password</h2>
 
-        <form onSubmit={submitLogin}>
-          <div className="input-box animation" style={{ "--S": 2 }}>
-            <input
-              type="email"
-              name="email"
-              required
-              placeholder=" "
-              value={login.email}
-              onChange={handleChange}
-            />
-            <label>Email</label>
-          </div>
-
-          <div className="input-box animation" style={{ "--S": 3 }}>
-            <input
-              type="password"
-              name="password"
-              required
-              placeholder=" "
-              value={login.password}
-              onChange={handleChange}
-            />
-            <label>Password</label>
-          </div>
-
-          <div className="input-box animation" style={{ "--S": 4 }}>
-            <button className="btn" type="submit" disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
-            </button>
-          </div>
-
-          <div className="regi-link animation" style={{ "--S": 5 }}>
-            <p>
-              Don’t have an account?{" "}
-              <a href="#" onClick={(e) => { e.preventDefault(); setActive(true); }}>
-                Sign Up
-              </a>
-            </p>
-          </div>
-
-          <div className="regi-link animation" style={{ "--S": 6 }}>
-            <p>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (typeof onForgot === "function") onForgot();
-                  else alert("Forgot password flow not implemented.");
-                }}
-              >
-                Forgot Password?
-              </a>
-            </p>
-          </div>
-
-          {msg && (
-            <p style={{ color: msg.type === "error" ? "red" : "lightgreen" }}>
-              {msg.text}
-            </p>
-          )}
+      {/* STEP 1 */}
+      {step === 1 && (
+        <form onSubmit={sendOtp}>
+          <input
+            type="email"
+            placeholder="Enter registered email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? "Sending..." : "Send OTP"}
+          </button>
         </form>
-      </div>
+      )}
 
-      {/* Right side text */}
-      <div className="info-content Login">
-        <h2 className="animation" style={{ "--S": 1 }}>Welcome Back!</h2>
-        <p className="animation" style={{ "--S": 2 }}>
-          To stay connected with us, please login with your personal info.
+      {/* STEP 2 */}
+      {step === 2 && (
+        <form onSubmit={verifyOtp}>
+          <input
+            type="text"
+            placeholder="Enter OTP"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? "Verifying..." : "Verify OTP"}
+          </button>
+        </form>
+      )}
+
+      {/* STEP 3 */}
+      {step === 3 && (
+        <form onSubmit={resetPassword}>
+          <input
+            type="password"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? "Updating..." : "Reset Password"}
+          </button>
+        </form>
+      )}
+
+      {msg && (
+        <p style={{ color: msg.type === "error" ? "red" : "lightgreen" }}>
+          {msg.text}
         </p>
-      </div>
-    </>
+      )}
+
+      <p>
+        <a href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>
+          Back to Login
+        </a>
+      </p>
+    </div>
   );
 }

@@ -1,303 +1,255 @@
 // backend/server.js
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcrypt");
+const { Pool } = require("pg");
+const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ----- Postgres pool using env vars -----
+// ==================== DATABASE ====================
 const pool = new Pool({
-  host: process.env.PGHOST || 'localhost',
+  host: process.env.PGHOST || "localhost",
   port: process.env.PGPORT ? Number(process.env.PGPORT) : 5432,
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || '',
-  database: process.env.PGDATABASE || 'miniproject',
+  user: process.env.PGUSER || "postgres",
+  password: process.env.PGPASSWORD || "",
+  database: process.env.PGDATABASE || "miniproject",
 });
 
-// ----- Nodemailer transporter (SMTP) -----
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || '',
-  port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465,
-  secure: process.env.SMTP_SECURE === 'true', // true for 465
-  auth: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-  },
-});
-
-// verify transporter (non-blocking)
-transporter.verify().then(() => {
-  console.log('SMTP transporter ready');
-}).catch((err) => {
-  console.warn('SMTP transporter verification failed (check .env):', err.message || err);
-});
-
-// ----- Test DB connection on startup -----
+// Test DB connection
 (async () => {
   try {
     const client = await pool.connect();
-    console.log('Postgres connected:', process.env.PGDATABASE || 'miniproject');
+    console.log("✅ Postgres connected:", pool.options.database);
     client.release();
   } catch (err) {
-    console.error('Postgres connection error:', err.message || err);
+    console.error("❌ Postgres connection failed:", err.message);
   }
 })();
 
-// ---------- Helpers ----------
-function genOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+// ==================== SMTP ====================
+if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  console.error("❌ SMTP env variables missing. Check .env file.");
 }
 
-// ---------- Routes ----------
-
-// Health-check
-app.get('/', (req, res) => res.send('Signup backend running'));
-
-// Debug: db info
-app.get('/api/debug/dbinfo', (req, res) => {
-  res.json({
-    host: process.env.PGHOST || 'localhost',
-    port: process.env.PGPORT || 5432,
-    user: process.env.PGUSER || 'postgres',
-    database: process.env.PGDATABASE || 'miniproject',
-    serverPort: process.env.PORT || 4000
-  });
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 });
 
-// Debug: list users (no password)
-app.get('/api/users', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT name, dob, phone_no, email FROM signup ORDER BY name LIMIT 100;');
-    res.json({ count: rows.length, rows });
-  } catch (err) {
-    console.error('GET /api/users error:', err);
-    res.status(500).json({ error: 'DB error' });
-  }
-});
+// Verify SMTP
+transporter.verify()
+  .then(() => console.log("✅ SMTP transporter ready"))
+  .catch(err => console.error("❌ SMTP error:", err.message));
+
+// ==================== HELPERS ====================
+function genOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// ==================== ROUTES ====================
+
+// Health check
+app.get("/", (_, res) => res.send("Server running"));
+
+// ==================== AUTH ====================
 
 // Signup
-app.post('/api/signup', async (req, res) => {
-  console.log('POST /api/signup: received request');
-  console.log('Request body:', req.body);
-
+app.post("/api/signup", async (req, res) => {
   try {
     const { name, dob, phone_no, email, password } = req.body;
-
     if (!name || !dob || !phone_no || !email || !password) {
-      console.warn('Validation failed: missing fields');
-      return res.status(400).json({ error: 'All fields are required' });
+      return res.status(400).json({ error: "All fields are required" });
     }
 
-    const phoneNumber = String(phone_no).replace(/\D/g, '');
-    if (!/^\d{6,15}$/.test(phoneNumber)) {
-      return res.status(400).json({ error: 'Invalid phone number' });
-    }
+    const hashed = await bcrypt.hash(password, 10);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Invalid email address' });
-    }
-
-    // hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const insertQuery = `
+    const q = `
       INSERT INTO signup (name, dob, phone_no, email, password)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING name, dob, phone_no, email;
+      VALUES ($1,$2,$3,$4,$5)
+      RETURNING name, email, phone_no
     `;
-    const values = [name, dob, phoneNumber, email, hashedPassword];
 
-    const result = await pool.query(insertQuery, values);
-    console.log('DB insert result:', result.rowCount, result.rows[0]);
+    const { rows } = await pool.query(q, [
+      name,
+      dob,
+      phone_no,
+      email,
+      hashed,
+    ]);
 
-    return res.status(201).json({ message: 'User registered', user: result.rows[0] });
+    res.status(201).json({ message: "User registered", user: rows[0] });
   } catch (err) {
-    console.error('Signup error:', err.code || err.message || err);
-    if (err.code === '23505') {
-      return res.status(409).json({ error: 'A user with that phone number already exists' });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Signup error:", err.message);
+    res.status(500).json({ error: "Signup failed" });
   }
 });
 
 // Login
-app.post('/api/login', async (req, res) => {
-  console.log('POST /api/login: received request');
-  console.log('Request body:', req.body);
-
+app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+
+    const q = await pool.query(
+      "SELECT name, phone_no, email, password FROM signup WHERE email=$1",
+      [email]
+    );
+
+    if (!q.rows.length) {
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const q = 'SELECT name, phone_no, email, password FROM signup WHERE email = $1 LIMIT 1';
-    const { rows } = await pool.query(q, [email]);
-
-    if (!rows.length) {
-      console.warn('Login failed: user not found for', email);
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const user = rows[0];
+    const user = q.rows[0];
     const ok = await bcrypt.compare(password, user.password);
+
     if (!ok) {
-      console.warn('Login failed: wrong password for', email);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    return res.json({
-      message: 'Login successful',
-      user: { name: user.name, phone_no: user.phone_no, email: user.email }
+    res.json({
+      message: "Login successful",
+      user: { name: user.name, email: user.email, phone_no: user.phone_no },
     });
   } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Login error:", err.message);
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
-// ----------------- OTP + Forgot Password Routes -----------------
-
-/**
- * Table expected:
- * CREATE TABLE IF NOT EXISTS otp_requests (
- *   email VARCHAR(255) PRIMARY KEY,
- *   code VARCHAR(10) NOT NULL,
- *   expires_at TIMESTAMP NOT NULL,
- *   attempts INT DEFAULT 0,
- *   created_at TIMESTAMP DEFAULT now()
- * );
- *
- * Run the above SQL once in your miniproject DB.
- */
+// ==================== OTP / FORGOT PASSWORD ====================
 
 // Send OTP
-app.post('/send-otp', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'Email is required' });
+app.post("/send-otp", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "Email required" });
 
   try {
-    // ensure user exists (optional privacy choice)
-    const userQ = await pool.query('SELECT email FROM signup WHERE email = $1 LIMIT 1', [email]);
-    if (userQ.rows.length === 0) {
-      return res.status(404).json({ error: 'No account with that email' });
-    }
+    console.log("📩 OTP request for:", email);
+    console.log("📨 SMTP HOST:", process.env.SMTP_HOST);
+    console.log("📨 SMTP USER:", process.env.SMTP_USER);
 
-    // Basic rate limit: count in last hour
-    const rateQ = await pool.query(
-      "SELECT COUNT(*)::int AS cnt FROM otp_requests WHERE created_at > (now() - interval '1 hour') AND email = $1",
+    const user = await pool.query(
+      "SELECT email FROM signup WHERE email=$1",
       [email]
     );
-    const cnt = rateQ.rows[0] ? Number(rateQ.rows[0].cnt) : 0;
-    if (cnt >= 5) {
-      return res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
+
+    if (!user.rows.length) {
+      return res.status(404).json({ error: "Email not registered" });
     }
 
     const code = genOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
 
-    // upsert OTP row
     await pool.query(`
-      INSERT INTO otp_requests (email, code, expires_at, attempts, created_at)
-      VALUES ($1, $2, $3, 0, now())
-      ON CONFLICT (email) DO UPDATE
-        SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at, attempts = 0, created_at = now()
-    `, [email, code, expiresAt]);
+      INSERT INTO otp_requests (email, code, expires_at, attempts)
+      VALUES ($1,$2,$3,0)
+      ON CONFLICT (email)
+      DO UPDATE SET code=$2, expires_at=$3, attempts=0
+    `, [email, code, expires]);
 
-    // send email
-    const mail = {
+    await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
-      subject: 'Your password reset OTP',
-      text: `Your OTP code is: ${code}. It expires in 10 minutes.`,
-      html: `<p>Your OTP code is: <strong>${code}</strong></p><p>It expires in 10 minutes.</p>`,
-    };
+      subject: "Password Reset OTP",
+      text: `Your OTP is ${code}. Valid for 10 minutes.`,
+    });
 
-    await transporter.sendMail(mail);
+    console.log(`✅ OTP sent to ${email}`);
+    res.json({ message: "OTP sent" });
 
-    console.log(`OTP ${code} sent to ${email}`);
-    return res.json({ message: 'OTP sent' });
   } catch (err) {
-    console.error('send-otp error', err);
-    return res.status(500).json({ error: 'Failed to send OTP' });
+    console.error("❌ send-otp FULL ERROR:", err);
+    res.status(500).json({ error: "Failed to send OTP" });
   }
 });
 
 // Verify OTP
-app.post('/verify-otp', async (req, res) => {
-  const { email, code } = req.body || {};
-  if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+app.post("/verify-otp", async (req, res) => {
+  const { email, code } = req.body;
 
   try {
-    const q = await pool.query('SELECT code, expires_at, attempts FROM otp_requests WHERE email = $1 LIMIT 1', [email]);
-    if (!q.rows.length) return res.status(404).json({ error: 'OTP not found' });
+    const q = await pool.query(
+      "SELECT code, expires_at FROM otp_requests WHERE email=$1",
+      [email]
+    );
 
-    const row = q.rows[0];
-    if (new Date(row.expires_at) < new Date()) {
-      return res.status(410).json({ error: 'OTP expired' });
+    if (!q.rows.length) {
+      return res.status(404).json({ error: "OTP not found" });
     }
 
-    if (row.attempts >= 5) {
-      return res.status(403).json({ error: 'Too many attempts' });
+    if (new Date(q.rows[0].expires_at) < new Date()) {
+      return res.status(410).json({ error: "OTP expired" });
     }
 
-    if (row.code !== String(code)) {
-      await pool.query('UPDATE otp_requests SET attempts = attempts + 1 WHERE email = $1', [email]);
-      return res.status(401).json({ error: 'Invalid OTP' });
+    if (q.rows[0].code !== code) {
+      return res.status(401).json({ error: "Invalid OTP" });
     }
 
-    await pool.query('UPDATE otp_requests SET attempts = 0 WHERE email = $1', [email]);
-    return res.json({ message: 'OTP valid' });
+    res.json({ message: "OTP verified" });
   } catch (err) {
-    console.error('verify-otp error', err);
-    return res.status(500).json({ error: 'Server error' });
+    console.error("verify-otp error:", err.message);
+    res.status(500).json({ error: "OTP verification failed" });
   }
 });
 
-// Reset password
-app.post('/reset-password', async (req, res) => {
-  const { email, code, newPassword } = req.body || {};
-  if (!email || !code || !newPassword) return res.status(400).json({ error: 'Email, code and newPassword required' });
+// Reset Password
+app.post("/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body;
 
   try {
-    const q = await pool.query('SELECT code, expires_at, attempts FROM otp_requests WHERE email = $1 LIMIT 1', [email]);
-    if (!q.rows.length) return res.status(404).json({ error: 'OTP not found' });
+    const q = await pool.query(
+      "SELECT code FROM otp_requests WHERE email=$1",
+      [email]
+    );
 
-    const row = q.rows[0];
-    if (new Date(row.expires_at) < new Date()) {
-      return res.status(410).json({ error: 'OTP expired' });
+    if (!q.rows.length || q.rows[0].code !== code) {
+      return res.status(401).json({ error: "Invalid OTP" });
     }
 
-    if (row.attempts >= 5) {
-      return res.status(403).json({ error: 'Too many attempts' });
-    }
-
-    if (row.code !== String(code)) {
-      await pool.query('UPDATE otp_requests SET attempts = attempts + 1 WHERE email = $1', [email]);
-      return res.status(401).json({ error: 'Invalid OTP' });
-    }
-
-    // hash new password and update user
     const hashed = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE signup SET password = $1 WHERE email = $2', [hashed, email]);
 
-    // remove OTP row
-    await pool.query('DELETE FROM otp_requests WHERE email = $1', [email]);
+    await pool.query(
+      "UPDATE signup SET password=$1 WHERE email=$2",
+      [hashed, email]
+    );
 
-    return res.json({ message: 'Password updated' });
+    await pool.query("DELETE FROM otp_requests WHERE email=$1", [email]);
+
+    res.json({ message: "Password reset successful" });
   } catch (err) {
-    console.error('reset-password error', err);
-    return res.status(500).json({ error: 'Server error' });
+    console.error("reset-password error:", err.message);
+    res.status(500).json({ error: "Password reset failed" });
   }
 });
 
-// ---------- Start server ----------
-const port = process.env.PORT ? Number(process.env.PORT) : 4000;
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+// ==================== SMTP TEST ====================
+app.get("/test-mail", async (req, res) => {
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to: process.env.SMTP_USER,
+      subject: "SMTP Test",
+      text: "SMTP is working successfully",
+    });
+
+    res.send("✅ Test mail sent successfully");
+  } catch (err) {
+    console.error("❌ SMTP TEST FAILED:", err);
+    res.status(500).send(err.message);
+  }
+});
+
+// ==================== START SERVER ====================
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });

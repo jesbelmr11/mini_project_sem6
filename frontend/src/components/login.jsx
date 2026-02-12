@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function Login({ setActive, setUser }) {
+export default function Login({ setActive, setUser, onForgot }) {
   const [login, setLogin] = useState({ email: "", password: "" });
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,6 @@ export default function Login({ setActive, setUser }) {
     try {
       setLoading(true);
 
-  
-
       const res = await fetch("http://localhost:4000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,16 +29,10 @@ export default function Login({ setActive, setUser }) {
       const data = await res.json();
 
       if (!res.ok) {
-        // backend sends { error: "Invalid credentials" } or simil
         setMsg({ type: "error", text: data.error || "Login failed" });
       } else {
-        // success: backend returns { message, user }
         setMsg({ type: "success", text: "Login successful!" });
-
-        // call setUser so App can render Dashboard
-        if (typeof setUser === "function") {
-          setUser(data.user);
-        }
+        if (typeof setUser === "function") setUser(data.user);
       }
     } catch (err) {
       console.error("fetch error:", err);
@@ -89,14 +81,22 @@ export default function Login({ setActive, setUser }) {
           <div className="regi-link animation" style={{ "--S": 5 }}>
             <p>
               Don’t have an account?{" "}
-              <a href="#" onClick={() => setActive(true)}>Sign Up</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setActive(true); }}>
+                Sign Up
+              </a>
             </p>
           </div>
 
-          {/* removed undefined setActivePanel — kept UI simple */}
+          {/* ✅ Proper Forgot Password hook */}
           <div className="regi-link animation" style={{ "--S": 6 }}>
             <p>
-              <a href="#" onClick={(e) => { e.preventDefault(); alert("Forgot password flow not implemented."); }}>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (typeof onForgot === "function") onForgot();
+                }}
+              >
                 Forgot Password?
               </a>
             </p>
@@ -110,7 +110,6 @@ export default function Login({ setActive, setUser }) {
         </form>
       </div>
 
-      {/* Right side text */}
       <div className="info-content Login">
         <h2 className="animation" style={{ "--S": 1 }}>Welcome Back!</h2>
         <p className="animation" style={{ "--S": 2 }}>
