@@ -5,6 +5,9 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const { Pool } = require("pg");
 const nodemailer = require("nodemailer");
+const si = require("systeminformation");
+const multer = require("multer");
+
 
 const app = express();
 app.use(cors());
@@ -247,6 +250,84 @@ app.get("/test-mail", async (req, res) => {
     res.status(500).send(err.message);
   }
 });
+
+
+
+// ==================== SYSTEM METRICS ====================
+
+app.get("/api/system-metrics", async (req, res) => {
+  try {
+    const cpu = await si.currentLoad();
+    const temp = await si.cpuTemperature();
+    const mem = await si.mem();
+    const disk = await si.fsSize();
+    const processes = await si.processes();
+    const uptime = await si.time();
+    const network = await si.networkStats();
+    const connections = await si.networkConnections();
+
+    res.json({
+      cpuUsage: cpu.currentLoad.toFixed(2),
+      cpuTemp: temp.main !== null ? temp.main.toFixed(1) : null,
+      totalMem: (mem.total / 1024 / 1024 / 1024).toFixed(2),
+      usedMem: (mem.used / 1024 / 1024 / 1024).toFixed(2),
+      diskUsed: (disk[0].used / 1024 / 1024 / 1024).toFixed(2),
+      diskTotal: (disk[0].size / 1024 / 1024 / 1024).toFixed(2),
+      activeProcesses: processes.all,
+      uptime: uptime.uptime,
+      activeConnections: connections.length,
+      loadAverage: cpu.avgLoad
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch metrics" });
+  }
+});
+
+
+
+// ==================== LOG FILES PARSING ====================
+// Store file in memory not in the folder
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Upload log file
+app.post("/api/upload-log", upload.single("logfile"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const fileContent = req.file.buffer.toString("utf-8");
+    const fileName = req.file.originalname;
+
+    const lines = fileContent.split("\n");
+
+    for (let line of lines) {
+      if (!line.trim()) continue;
+
+      // Example log format:
+      // 2026-02-15 10:23:41 ERROR Database connection failed
+
+      const parts = line.split(" ");
+      const timestamp = parts[0] + " " + parts[1];
+      const logLevel = parts[2];
+      const message = parts.slice(3).join(" ");
+
+      await pool.query(
+        `INSERT INTO structured_logs (file_name, timestamp, log_level, message)
+         VALUES ($1, $2, $3, $4)`,
+        [fileName, timestamp, logLevel, message]
+      );
+    }
+
+    res.json({ message: "Logs uploaded and stored in database" });
+
+  } catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ error: "Failed to process log file" });
+  }
+});
+
 
 // ==================== START SERVER ====================
 const PORT = process.env.PORT || 4000;

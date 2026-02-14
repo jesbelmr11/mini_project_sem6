@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "../styles/style.css";
 
 export default function ForgotPassword({ onBack }) {
   const [step, setStep] = useState(1); // 1=email, 2=otp, 3=reset
@@ -22,6 +23,7 @@ export default function ForgotPassword({ onBack }) {
       });
 
       const data = await res.json();
+
       if (!res.ok) {
         setMsg({ type: "error", text: data.error });
       } else {
@@ -49,6 +51,7 @@ export default function ForgotPassword({ onBack }) {
       });
 
       const data = await res.json();
+
       if (!res.ok) {
         setMsg({ type: "error", text: data.error });
       } else {
@@ -80,10 +83,12 @@ export default function ForgotPassword({ onBack }) {
       });
 
       const data = await res.json();
+
       if (!res.ok) {
         setMsg({ type: "error", text: data.error });
       } else {
         setMsg({ type: "success", text: "Password reset successful" });
+
         setTimeout(() => {
           if (typeof onBack === "function") onBack();
         }, 1500);
@@ -96,68 +101,105 @@ export default function ForgotPassword({ onBack }) {
   }
 
   return (
-    <div className="form-box Login">
-      <h2>Forgot Password</h2>
+    <div className="container">
+      {/* White Shapes */}
+      <div className="curved-shape"></div>
+      <div className="curved-shape2"></div>
 
-      {/* STEP 1 */}
-      {step === 1 && (
-        <form onSubmit={sendOtp}>
-          <input
-            type="email"
-            placeholder="Enter registered email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? "Sending..." : "Send OTP"}
-          </button>
-        </form>
-      )}
+      {/* Form Section */}
+      <div className="form-box Login">
+        <h2>Forgot Password</h2>
 
-      {/* STEP 2 */}
-      {step === 2 && (
-        <form onSubmit={verifyOtp}>
-          <input
-            type="text"
-            placeholder="Enter OTP"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? "Verifying..." : "Verify OTP"}
-          </button>
-        </form>
-      )}
+        {/* STEP 1 */}
+        {step === 1 && (
+          <form onSubmit={sendOtp}>
+            <div className="input-box">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <label>Email</label>
+            </div>
 
-      {/* STEP 3 */}
-      {step === 3 && (
-        <form onSubmit={resetPassword}>
-          <input
-            type="password"
-            placeholder="New password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? "Updating..." : "Reset Password"}
-          </button>
-        </form>
-      )}
+            <button className="btn" type="submit" disabled={loading}>
+              {loading ? "Sending..." : "Send OTP"}
+            </button>
+          </form>
+        )}
 
-      {msg && (
-        <p style={{ color: msg.type === "error" ? "red" : "lightgreen" }}>
-          {msg.text}
+        {/* STEP 2 */}
+        {step === 2 && (
+          <form onSubmit={verifyOtp}>
+            <div className="input-box">
+              <input
+                type="text"
+                required
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+              />
+              <label>Enter OTP</label>
+            </div>
+
+            <button className="btn" type="submit" disabled={loading}>
+              {loading ? "Verifying..." : "Verify OTP"}
+            </button>
+          </form>
+        )}
+
+        {/* STEP 3 */}
+        {step === 3 && (
+          <form onSubmit={resetPassword}>
+            <div className="input-box">
+              <input
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <label>New Password</label>
+            </div>
+
+            <button className="btn" type="submit" disabled={loading}>
+              {loading ? "Updating..." : "Reset Password"}
+            </button>
+          </form>
+        )}
+
+        {msg && (
+          <p style={{ color: msg.type === "error" ? "red" : "lightgreen", marginTop: 15 }}>
+            {msg.text}
+          </p>
+        )}
+
+        <div className="regi-link">
+          <p>
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#007bff",
+                cursor: "pointer",
+                fontWeight: 600
+              }}
+            >
+              ← Back to Login
+            </button>
+          </p>
+        </div>
+      </div>
+
+      {/* Right Side Info Panel */}
+      <div className="info-content Login">
+        <h2>Password Recovery</h2>
+        <p>
+          Enter your registered email address to receive a One-Time Password.
+          Verify the OTP and set a new secure password for your account.
         </p>
-      )}
-
-      <p>
-        <a href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>
-          Back to Login
-        </a>
-      </p>
+      </div>
     </div>
   );
 }
