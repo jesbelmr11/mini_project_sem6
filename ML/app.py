@@ -1,28 +1,20 @@
 from flask import Flask, request, jsonify
 import joblib
 
-# =========================
-# 1️⃣ Initialize Flask
-# =========================
+#Initialize Flask
 app = Flask(__name__)
 
-# =========================
-# 2️⃣ Load Trained Model
-# =========================
+#Load Trained Model
 model = joblib.load("random_forest_log_model.pkl")
 
 print("✅ Model loaded successfully")
 
-# =========================
-# 3️⃣ Home Route
-# =========================
+#Home Route
 @app.route("/")
 def home():
     return "Log Root Cause Prediction API Running 🚀"
 
-# =========================
-# 4️⃣ Predict Route
-# =========================
+# Predict Route
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -45,8 +37,6 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# =========================
-# 5️⃣ Run Server
-# =========================
+#Run Server
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
