@@ -8,10 +8,10 @@ const nodemailer = require("nodemailer");
 const si = require("systeminformation");
 const multer = require("multer");
 
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
 
 // ==================== DATABASE ====================
 const pool = new Pool({
@@ -33,6 +33,7 @@ const pool = new Pool({
   }
 })();
 
+
 // ==================== SMTP ====================
 if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
   console.error("❌ SMTP env variables missing. Check .env file.");
@@ -53,15 +54,18 @@ transporter.verify()
   .then(() => console.log("✅ SMTP transporter ready"))
   .catch(err => console.error("❌ SMTP error:", err.message));
 
+
 // ==================== HELPERS ====================
 function genOtp() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+
 // ==================== ROUTES ====================
 
 // Health check
 app.get("/", (_, res) => res.send("Server running"));
+
 
 // ==================== AUTH ====================
 
@@ -69,6 +73,7 @@ app.get("/", (_, res) => res.send("Server running"));
 app.post("/api/signup", async (req, res) => {
   try {
     const { name, dob, phone_no, email, password } = req.body;
+
     if (!name || !dob || !phone_no || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -90,11 +95,13 @@ app.post("/api/signup", async (req, res) => {
     ]);
 
     res.status(201).json({ message: "User registered", user: rows[0] });
+
   } catch (err) {
     console.error("Signup error:", err.message);
     res.status(500).json({ error: "Signup failed" });
   }
 });
+
 
 // Login
 app.post("/api/login", async (req, res) => {
@@ -119,27 +126,28 @@ app.post("/api/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      user: { name: user.name, email: user.email, phone_no: user.phone_no },
+      user: {
+        name: user.name,
+        email: user.email,
+        phone_no: user.phone_no
+      },
     });
+
   } catch (err) {
     console.error("Login error:", err.message);
     res.status(500).json({ error: "Login failed" });
   }
 });
 
+
 // ==================== OTP / FORGOT PASSWORD ====================
 
-// Send OTP
 app.post("/send-otp", async (req, res) => {
   const { email } = req.body;
 
   if (!email) return res.status(400).json({ error: "Email required" });
 
   try {
-    console.log("📩 OTP request for:", email);
-    console.log("📨 SMTP HOST:", process.env.SMTP_HOST);
-    console.log("📨 SMTP USER:", process.env.SMTP_USER);
-
     const user = await pool.query(
       "SELECT email FROM signup WHERE email=$1",
       [email]
@@ -166,14 +174,14 @@ app.post("/send-otp", async (req, res) => {
       text: `Your OTP is ${code}. Valid for 10 minutes.`,
     });
 
-    console.log(`✅ OTP sent to ${email}`);
     res.json({ message: "OTP sent" });
 
   } catch (err) {
-    console.error("❌ send-otp FULL ERROR:", err);
+    console.error("send-otp error:", err);
     res.status(500).json({ error: "Failed to send OTP" });
   }
 });
+
 
 // Verify OTP
 app.post("/verify-otp", async (req, res) => {
@@ -198,11 +206,12 @@ app.post("/verify-otp", async (req, res) => {
     }
 
     res.json({ message: "OTP verified" });
+
   } catch (err) {
-    console.error("verify-otp error:", err.message);
     res.status(500).json({ error: "OTP verification failed" });
   }
 });
+
 
 // Reset Password
 app.post("/reset-password", async (req, res) => {
@@ -228,29 +237,11 @@ app.post("/reset-password", async (req, res) => {
     await pool.query("DELETE FROM otp_requests WHERE email=$1", [email]);
 
     res.json({ message: "Password reset successful" });
+
   } catch (err) {
-    console.error("reset-password error:", err.message);
     res.status(500).json({ error: "Password reset failed" });
   }
 });
-
-// ==================== SMTP TEST ====================
-app.get("/test-mail", async (req, res) => {
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: process.env.SMTP_USER,
-      subject: "SMTP Test",
-      text: "SMTP is working successfully",
-    });
-
-    res.send("✅ Test mail sent successfully");
-  } catch (err) {
-    console.error("❌ SMTP TEST FAILED:", err);
-    res.status(500).send(err.message);
-  }
-});
-
 
 
 // ==================== SYSTEM METRICS ====================
@@ -266,6 +257,14 @@ app.get("/api/system-metrics", async (req, res) => {
     const network = await si.networkStats();
     const connections = await si.networkConnections();
 
+    let totalRx = 0;
+    let totalTx = 0;
+
+    network.forEach((n) => {
+      totalRx += n.rx_bytes;
+      totalTx += n.tx_bytes;
+    });
+
     res.json({
       cpuUsage: cpu.currentLoad.toFixed(2),
       cpuTemp: temp.main !== null ? temp.main.toFixed(1) : null,
@@ -276,7 +275,9 @@ app.get("/api/system-metrics", async (req, res) => {
       activeProcesses: processes.all,
       uptime: uptime.uptime,
       activeConnections: connections.length,
-      loadAverage: cpu.avgLoad
+      loadAverage: cpu.avgLoad,
+      networkReceived: (totalRx / 1024 / 1024).toFixed(2),
+      networkSent: (totalTx / 1024 / 1024).toFixed(2)
     });
 
   } catch (err) {
@@ -285,12 +286,9 @@ app.get("/api/system-metrics", async (req, res) => {
 });
 
 
-
-// ==================== LOG FILES PARSING ====================
-// Store file in memory not in the folder
+// ==================== LOG FILE UPLOAD ====================
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Upload log file
 app.post("/api/upload-log", upload.single("logfile"), async (req, res) => {
   try {
     if (!req.file) {
@@ -304,9 +302,6 @@ app.post("/api/upload-log", upload.single("logfile"), async (req, res) => {
 
     for (let line of lines) {
       if (!line.trim()) continue;
-
-      // Example log format:
-      // 2026-02-15 10:23:41 ERROR Database connection failed
 
       const parts = line.split(" ");
       const timestamp = parts[0] + " " + parts[1];
@@ -323,7 +318,6 @@ app.post("/api/upload-log", upload.single("logfile"), async (req, res) => {
     res.json({ message: "Logs uploaded and stored in database" });
 
   } catch (err) {
-    console.error("Upload error:", err);
     res.status(500).json({ error: "Failed to process log file" });
   }
 });

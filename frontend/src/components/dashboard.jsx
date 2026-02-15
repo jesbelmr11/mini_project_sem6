@@ -235,6 +235,18 @@ export default function Dashboard({ user, onLogout }) {
                     <h4>Load Average</h4>
                     <p>{metrics.loadAverage}</p>
                   </div>
+
+                  {/* ✅ NEW NETWORK CARDS */}
+                  <div style={cardStyle}>
+                    <h4>Network Received</h4>
+                    <p>{metrics.networkReceived} MB</p>
+                  </div>
+
+                  <div style={cardStyle}>
+                    <h4>Network Sent</h4>
+                    <p>{metrics.networkSent} MB</p>
+                  </div>
+
                 </div>
               )}
             </>
@@ -268,7 +280,6 @@ export default function Dashboard({ user, onLogout }) {
             </div>
           )}
 
-          {/* ===== OTHER PAGES ===== */}
           {activeNav === "logs" && <h3>📁 Log Files Section</h3>}
           {activeNav === "errors" && <h3>⚠ Error & Alert Monitoring</h3>}
           {activeNav === "settings" && <h3>⚙ System Settings</h3>}
