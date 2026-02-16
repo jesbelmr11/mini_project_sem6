@@ -1,25 +1,35 @@
-import logo from './logo.svg';
-import './App.css';
+import { useState } from "react";
+import DashboardLayout from "./components/DashboardLayout";
 
-function App() {
+import SystemMetrics from "./pages/SystemMetrics";
+import LogsPage from "./pages/LogsPage";
+import ErrorsPage from "./pages/ErrorsPage";
+import UploadPage from "./pages/UploadPage";
+import SettingsPage from "./pages/SettingsPage";
+
+export default function App() {
+  const [active, setActive] = useState("metrics");
+
+  const renderPage = () => {
+    switch (active) {
+      case "metrics":
+        return <SystemMetrics />;
+      case "logs":
+        return <LogsPage />;
+      case "errors":
+        return <ErrorsPage />;
+      case "upload":
+        return <UploadPage />;
+      case "settings":
+        return <SettingsPage />;
+      default:
+        return <SystemMetrics />;
+    }
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <DashboardLayout active={active} setActive={setActive}>
+      {renderPage()}
+    </DashboardLayout>
   );
 }
-
-export default App;
